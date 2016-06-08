@@ -1,0 +1,79 @@
+#include "and.h"
+
+using namespace std;
+
+/**
+ * corresponds to the algorithm init(queryTerms) in the AND paper
+ */
+AND::AND(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms) {
+	    this->curDoc = 0;
+	    this->plists = postinglists;
+	    this->plistsSize = plists_size;
+	    this->terms = _terms;
+	    this->first = true;
+	    currentPostings = new doc[plists_size];
+        
+        //coloca em ordem de importancia da palavra
+        //palavras mais importantes (maior idf) tem lista invertida menor
+
+        if (plistsSize > 1) sortPlists(); 
+
+	    for (unsigned int i = 0; i < plists_size; ++i) {
+	        cout << terms[i]->idf << endl;
+            doc *aux = 	postinglists[i]->first();
+		    currentPostings[i] = *aux; //TODO: copiando, podia passar o ponteiro
+		    if (curDoc < currentPostings[i].doc_id)  
+		        curDoc = currentPostings[i].doc_id; //pega maior documento
+		    delete aux;
+	    }
+
+}
+
+AND::~AND() {
+	delete[] currentPostings;
+}
+
+doc* AND::next(const float threshold) {
+
+    if (!first) { //se nao for a primeira chamada do next
+        //avança um dos ponteiros
+        this->plists[plistsSize-1]->next(curDoc+1, &currentPostings[plistsSize-1]);
+        if (currentPostings[plistsSize-1].doc_id == PostingList::END_OF_LIST_DOC_ID()) {
+            return NULL;        
+        }
+        curDoc = currentPostings[plistsSize-1].doc_id;
+    }
+    else first = false;
+    
+    while(true) {
+        bool is_result = true;
+        for (unsigned int i = 0; i < plistsSize ; i++) {
+            if (currentPostings[i].doc_id != curDoc) { //se nao for igual dá next até lá e atualiza curDoc 
+                this->plists[i]->next(curDoc, &currentPostings[i]); 
+                if (currentPostings[i].doc_id == PostingList::END_OF_LIST_DOC_ID()) 
+                    return NULL; //acabou a lista invertida entao não tem como ter mais resultado                                
+                if (curDoc != currentPostings[i].doc_id) {
+                    is_result = false;
+                    curDoc = currentPostings[i].doc_id;
+                }
+
+            }
+        }
+        if (is_result) 
+            return currentPostings;
+    }   
+}
+
+//LOOP com countdown
+//        for (unsigned int i = plistsSize; i; i--) {
+//            if (currentPostings[i-1].doc_id != curDoc) { //se nao for igual dá next até lá e atualiza curDoc 
+//                this->plists[i-1]->next(curDoc, &currentPostings[i-1]); 
+//                if (currentPostings[i-1].doc_id == PostingList::END_OF_LIST_DOC_ID()) 
+//                    return NULL; //acabou a lista invertida entao não tem como ter mais resultado                                
+//                if (curDoc != currentPostings[i-1].doc_id) {
+//                    is_result = false;
+//                    curDoc = currentPostings[i-1].doc_id;
+//                }
+//            }
+//        }
+

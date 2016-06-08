@@ -1,0 +1,66 @@
+#include "../../../libs-iw/indexer/include/DescritorColecaoWBR.h"
+#include "../../../libs-iw/indexer/include/DescritorInfoweb.h"
+
+#define NUMERO_PAGINAS 1692096
+
+int main(int argc, char **argv) {
+
+	DescritorColecaoWBR *descWBR;
+
+	IDXbase idx;
+
+	descWBR = new DescritorColecaoWBR(argv[1], 1);
+	char *buffer = new char[100000000];
+	int tam;
+
+
+	char filename[10000];
+	sprintf(filename, "%s.idx0", argv[2]);
+	FILE *fpIdx = fopen(filename, "w");
+
+	sprintf(filename, "%s.text0", argv[2]);
+	FILE *fpText = fopen(filename, "w");
+/*
+	sprintf(filename, "%s.title0", argv[2]);
+	FILE *fpTitle = fopen(filename, "w");
+
+	sprintf(filename, "%s.url0", argv[2]);
+	FILE *fpUrl = fopen(filename, "w");
+
+	sprintf(filename, "%s.anchor0", argv[2]);
+	FILE *fpAnchor = fopen(filename, "w");
+*/
+	idx.id_arq = 0;
+
+	for (int i=0;i<NUMERO_PAGINAS;i++) {
+		
+		/*descWBR->lerURL(i, buffer, tam);
+		idx.size_url = tam;
+		idx.offset_url = ftell(fpUrl);
+		buffer[tam++] ='\n';
+		fwrite(buffer, sizeof(char), tam, fpUrl);
+	
+		descWBR->lerTitulo(i, buffer, tam);
+		idx.size_title = tam;
+		idx.offset_title = ftell(fpTitle);
+		fwrite(buffer, sizeof(char), tam, fpTitle);
+
+		
+		descWBR->lerLinkContent(i, buffer, tam);
+		idx.size_anchor = tam;
+		idx.offset_anchor = ftell(fpAnchor);
+		fwrite(buffer, sizeof(char), tam, fpAnchor);
+		*/
+		
+		descWBR->lerDoc(i, buffer, tam);
+		cout<<"caio1"<<endl;
+		idx.size_text = tam;
+		idx.offset_text = ftell(fpText);
+		fwrite(buffer, sizeof(char), tam, fpText);
+	
+		fwrite(&idx, sizeof(IDXbase), 1, fpIdx);
+	
+	}	
+}
+
+

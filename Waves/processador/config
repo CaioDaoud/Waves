@@ -1,0 +1,14 @@
+metodo = bmw
+score = bm25
+formula = 0
+topk = 10
+query = ../../data/10kquery_AOL
+camadaUnica = ../../data/gov100k/govTxt.
+# Usado somente para waves, csp e bmw-m
+camada1 = ../../data/gov100k/indicesParciais/fir_1.
+camada2 = ../../data/gov100k/indicesParciais/mid_21.
+camada3 = ../../data/gov100k/indicesParciais/th_21.
+resultFile = xbmw
+limiar = 0
+# Modo de query em arquivo ou uma unica query
+mode = queryFile

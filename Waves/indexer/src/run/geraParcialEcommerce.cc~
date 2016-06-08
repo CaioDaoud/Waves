@@ -1,0 +1,194 @@
+#include <stdio.h>
+#include <iostream>
+#include <time.h>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include "../../../libs-iw/indexer/include/IndiceInvertido.h"
+#include "../../../libs-iw/indexer/include/parse_query.h"
+#include "../../../libs-iw/indexer/include/Vocabulario.h"
+#include "../../../libs-iw/indexer/include/valstringuniao_utf8.h"
+#include "../../../libs-iw/indexer/include/DescritorInfoweb.h"
+#include "../../../libs-iw/indexer/include/SegmentaURL.h"
+#ifdef __APPLE__
+#include <unordered_map>
+#elif
+#include <tr1/unordered_map>
+#endif
+#include <vector>
+#include <algorithm>
+
+#define MAX_TERMOS 10000000
+#define MAX_SIZE_TEXT 1024*1024*100
+
+#ifndef __APPLE__ 
+using namespace std::tr1;
+#endif
+using namespace std;
+
+
+IndiceInvertido *lista;
+DescritorInfoweb *descritor;
+Vocabulario *voc_word;
+
+typedef struct
+{
+	unsigned int termoid;
+	int freq;
+}parWordFreq;
+
+_tipo_buffer doc;
+unsigned int numero_termos, i, p, cont_d=0;
+
+void (*get_feature_doc)( unsigned int, char*);
+
+void get_text(unsigned int doc, char *text){	descritor->get_text(doc, text);		}
+
+void get_title(unsigned int doc, char *text){	descritor->get_title(doc, text);	}
+
+void get_anchor(unsigned int doc, char *text){	descritor->get_anchor(doc, text);	}
+
+bool compara(const parWordFreq x, const parWordFreq y){	return x.freq > y.freq;	}
+
+unsigned char extrai_barras(char *url)
+{
+	unsigned char n=0;
+	while(*url)
+	{
+		if(*url == '/')	n++;
+		url++;
+	}
+	return n;
+}
+
+int main(int argc, char **argv)
+{
+	int max_doc = -1;
+	unsigned int *termo_id = new unsigned int[MAX_TERMOS];
+	char *text = new char[MAX_SIZE_TEXT];
+	char *url = new char[40000], *parsed_url = new char[40000];
+	char *title = new char[40000], *parsed_title = new char[40000];
+
+	unsigned char *barras_url = NULL;
+
+	time_t start = time(NULL), start2 = time(NULL);
+	int cont_doc = 0;
+
+	if(argc < 5)
+	{
+		printf("Execute\n\t%s <path_base> <path_indice> <vocabulario> <0-titulo; 1-texto; 2-anchor; 3-url> <max_docs(opcional)>\n", argv[0]);
+		exit(1);
+	}
+
+	if(argc >= 6)	max_doc = atoi(argv[5]);
+
+	lista = new IndiceInvertido(argv[2], FLAG_PARCIAL);
+	descritor = new DescritorInfoweb(argv[1]);
+	voc_word = new Vocabulario(12000000, 30, argv[3], 2);
+
+	SegmentaURL segURL;
+
+	StartConvertSemAcentos();
+
+	int tipoFeature = atoi(argv[4]);
+
+	if(max_doc == -1 || max_doc > descritor->get_num_docs())	max_doc = descritor->get_num_docs();
+
+	if(tipoFeature==1)
+	{
+		get_feature_doc = &get_text;
+		printf("Indexando Texto\n");
+	}
+	else if(tipoFeature==2)
+	{
+		get_feature_doc = &get_anchor;
+		printf("Indexando Anchor\n");
+	}
+	else if(tipoFeature==3)
+	{
+		barras_url = new unsigned char[max_doc];
+	}
+	else
+	{
+		get_feature_doc = &get_title;
+		printf("Indexando Titulo\n");
+	}
+
+	cout << "Numedo de documentos na base " << descritor->get_num_docs() << endl;
+
+	for(doc = 0; doc < max_doc; doc++)
+	{
+		/*Url*/
+		if(tipoFeature==3)
+		{
+			descritor->get_title(doc, title);
+			descritor->get_url(doc, url);
+
+			barras_url[doc] = extrai_barras(url);
+
+			/*Processa a url*/
+			ConverteBufferSemAcentos( url, &url[strlen(url)], parsed_url );
+			ConverteBufferSemAcentos( title, &title[strlen(title)], parsed_title );
+
+			text[0] = 0;
+			segURL.geraSegmentos( parsed_url, parsed_title, text );
+
+			if(strlen(text))
+			printf("%d [%s] [%s]\n", doc, url, text);
+		}
+		else
+		{
+			/*Le o conteudo do documento*/
+			get_feature_doc(doc, text);
+		}
+
+		/*Perseia o conteudo do documento*/
+		numero_termos = parse_query(text, voc_word, termo_id);
+
+		/*Insere os termos_id do documento no buffer temporario*/
+		for( p = 0; p < numero_termos; p++ )
+		{
+			lista->Insere( doc, termo_id[p], p+1 );
+
+			/*checa se o buffer temporario lotou*/
+			if( lista->full() )
+			{
+				time_t t=time(NULL);
+				lista->dump_temporario();
+				printf("Tempo para escrever parcial: %.2lf\n", difftime(time(NULL), t));
+				p--;
+			}
+		}
+
+		if( doc % 100000 == 0 )
+		{
+			printf("salvando %d documentos em %.1lf seg\ttotal: %.1lf min\n", doc, difftime(time(NULL), start2), difftime(time(NULL), start)/60);
+			start2 = time(NULL);
+		}
+	}
+
+	time_t t=time(NULL);
+	/*salva o restante em memoria*/
+	lista->dump_temporario();
+	printf("Tempo para escrever parcial: %.2lf\n", difftime(time(NULL), t));
+
+	printf("Salvos %d documentos\n", doc );
+	cout << "Parciais Gerados em " << difftime(time(NULL), start)/60 << " minutos" << endl;
+
+	/*Url*/
+	if(tipoFeature==3)
+	{
+		FILE *fpB = fopen("num_barras", "w");
+		fwrite(barras_url, sizeof(char), doc, fpB);
+		fclose(fpB);
+	}
+
+	delete lista;
+	delete descritor;
+	delete voc_word;
+	delete termo_id;
+	delete text;
+	if(barras_url)	delete[] barras_url;
+
+	return 0;
+}

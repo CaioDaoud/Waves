@@ -1,0 +1,411 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h> 
+#include <vector>
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <sys/time.h>
+#include <stdio.h>
+#include <unistd.h>
+#ifdef __APPLE_CC__ 
+#include <unordered_map>
+#elseif
+#include <tr1/unordered_map>
+#endif
+#include <map>
+#include "valstringuniao_utf8.h"
+#include "IndiceInvertido.h"
+#include "prefixinmem.h"
+#include "LeitorLista.h"
+#include "Vocabulario.h"
+#include <vector>
+#include <iostream>
+#include "PorterStemmer.h"
+
+#define NUM 100000
+#define NUM_DOC_BASE 26000000
+#define BLOCO_TAMANHO 1000
+#define NUMERO 100 //Maximo numero de letras em uma palavra
+#define MAX_COLUNAS 10  // Numero maximo de letra em uma palavra que iremos adotar obs:(pode ser menor que qntd de letras de uma palavra)
+
+
+#ifndef __APPLE_CC__ 
+using namespace std;
+#endif
+
+typedef struct termo
+{
+       char str[100];
+       int id;
+       float idfUrl;
+       float idfText;
+       float idfTitle;
+       float idfAnchor;
+       float idfWholedoc;
+} Termo;
+
+typedef struct 
+{
+       int freqUrl;
+       int freqTitle;
+       int freqText;
+       int freqAnchor;
+       int freqWholedoc;
+} Frequencias;
+
+typedef struct documento
+{
+       int docid;
+
+       int relevancia;
+       double pagerank;
+       int slashurl;
+       int lenurl;
+
+       float normaUrl;
+       float normaTitle;
+       float normaText;
+       float normaAnchor;
+       float normaWholedoc;
+
+        Frequencias freqs[100];
+} Documento;
+
+typedef struct consulta
+{
+       int IdConsulta;
+       int NumTermos;
+       int NumDocs;
+       Termo termos[100];
+       Documento *documentos;
+} Consulta;
+
+typedef struct{
+	int consid;
+	int docid;
+	int rel;
+} Avaliacao; 
+
+vector<Avaliacao> vetAvaliacao;
+map<string, int> hashIdTrec;
+map<int, string> vetIdTrec;
+
+float idfUrl[NUM_DOC_BASE];
+float idfTitle[NUM_DOC_BASE];
+float idfText[NUM_DOC_BASE];
+float idfAnchor[NUM_DOC_BASE];
+float idfWholedoc[NUM_DOC_BASE];
+
+float normaUrl[NUM_DOC_BASE];
+float normaTitle[NUM_DOC_BASE];
+float normaText[NUM_DOC_BASE];
+float normaAnchor[NUM_DOC_BASE];
+float normaWholedoc[NUM_DOC_BASE];
+
+double pagerank[NUM_DOC_BASE];
+int lenurl[NUM_DOC_BASE];
+int slashurl[NUM_DOC_BASE];
+
+Consulta *VetConsultas;
+
+void carregaAvaliacao(char *filename) {
+	FILE *arquivo = fopen(filename,"r+");
+	char palavra[50];
+	int lixo;
+	Avaliacao aval;
+
+	if (!arquivo) {
+		printf("Erro na Abertura do Arquivo %s\n", filename);
+		exit(1);
+	}
+
+	while (!feof(arquivo)) {
+		fscanf(arquivo, "%d %d %s %d", &aval.consid, &lixo, &palavra, &aval.rel);
+        if(feof(arquivo))   break;
+
+		map<string, int>::iterator it = hashIdTrec.find(palavra);
+		aval.docid = 0;
+		if(it != hashIdTrec.end())
+		{
+    		aval.docid = it->second;
+    	}
+
+		vetAvaliacao.push_back(aval);
+	}
+}
+
+void converteId(char* conversor) {
+	FILE *arquivo = fopen(conversor,"r+");
+	int id;
+	char palavra[50];
+
+	if (!arquivo) {
+		printf("Erro na Abertura do Arquivo %s\n", conversor);
+		exit(1);
+	}
+
+	while (!feof(arquivo)) {
+
+          //Quando, ao ler o BLOCO_TAMANHO, chegar no fim do arquivo, não precisa utilizar todo o vetor... então, segue:
+          if (feof(arquivo)) {
+               break;
+          }
+
+		fscanf(arquivo, "%d %s", &id, palavra);
+		
+		hashIdTrec[palavra] = id;
+		vetIdTrec[id] = palavra;
+	}		
+}
+
+void carregaIdfNorma(char *path) {
+	char filename[1000];	
+	FILE *arquivo;
+	
+	sprintf(filename, "%surl/url.idf", path);
+	arquivo = fopen(filename, "r");
+	fread(idfUrl, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%stitle/title.idf", path);
+	arquivo = fopen(filename, "r");
+	fread(idfTitle, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%stext/text.idf", path);
+	arquivo = fopen(filename, "r");
+	fread(idfText, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%sanchor/anchor.idf", path);
+	arquivo = fopen(filename, "r");
+	fread(idfAnchor, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%swholedoc/wholedoc.idf", path);
+	arquivo = fopen(filename, "r");
+	fread(idfWholedoc, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%surl/url.norma", path);
+	arquivo = fopen(filename, "r");
+	fread(normaUrl, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%stitle/title.norma", path);
+	arquivo = fopen(filename, "r");
+	fread(normaTitle, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%stext/text.norma", path);
+	arquivo = fopen(filename, "r");
+	fread(normaText, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%sanchor/anchor.norma", path);
+	arquivo = fopen(filename, "r");
+	fread(normaAnchor, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%swholedoc/wholedoc.norma", path);
+	arquivo = fopen(filename, "r");
+	fread(normaWholedoc, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%spagerank", path);
+	arquivo = fopen(filename, "r");
+	fread(pagerank, NUM_DOC_BASE, sizeof(double), arquivo);
+
+	sprintf(filename, "%slenurl", path);
+	arquivo = fopen(filename, "r");
+	fread(lenurl, NUM_DOC_BASE, sizeof(int), arquivo);
+
+	sprintf(filename, "%sslashurl", path);
+	arquivo = fopen(filename, "r");
+	fread(slashurl, NUM_DOC_BASE, sizeof(int), arquivo);
+}
+
+int main(int argc, char **argv)
+{
+	if(argc < 7)
+	{
+		printf("Execute\n\t%s <path_index> <path_vocab> <arquivo de Consultas (TOPICOS)> <Arq Relevancia> <Arq-Mapeamento Wt10g - Trec> <Primeira ConsId>\n", argv[0]);
+		exit(1);
+	}
+
+	int termid=0;
+	FILE *fidx, *arquivo;
+	IDX idx;
+	int i,k;
+	LeitorLista leitor;
+	char filename[4096];
+	char arq[1000];
+	int idConsulta = atoi(argv[6]), ntermos = 0;
+    int consultaid = 0;
+
+	char features[5][20];
+
+	StartConvertSemAcentos();
+
+	char texto[100];
+
+    PorterStemmer pStemmer;
+
+    VetConsultas = new Consulta[1000];
+
+	for(int i=0; i<1000; i++)
+	{
+		VetConsultas[i].documentos = new Documento[10000];
+	}
+
+/*	Vetor de Features para acessar os files	*/
+	strcpy(features[0],"text/text.");
+	strcpy(features[1],"title/title.");     
+	strcpy(features[2],"anchor/anchor.");
+	strcpy(features[3],"url/url.");
+	strcpy(features[4],"wholedoc/wholedoc.");
+	
+	carregaIdfNorma(argv[1]);
+	converteId(argv[5]); //Converte Id dos documentos da WT10G para os Id's que temos da GOV.
+	carregaAvaliacao(argv[4]); //Cria um arquivo chamado Relevantes que possui os campos: Consulta, DocId, Relevancia
+
+	//Abrir o arquivo de Consultas
+	arquivo = fopen(argv[3], "r+");
+
+	//Inicializar o Vocabulario
+	Vocabulario *voc_word = new Vocabulario(1000, 2000, argv[2], 2);
+
+	while (1) {
+		if (feof(arquivo)) break;
+
+		//Pegar uma consulta
+		fgets((char*)texto, BLOCO_TAMANHO, arquivo);
+		texto[strlen(texto)-1]= 0;
+	
+		ntermos = 0;
+		int inicio = 0, fim=0;
+
+		//Processar todos os termos da consulta até encontrar um '0'
+		while(texto[fim])
+		{
+			//Passando os caracteres para Caixa Baixa
+			texto[fim]=tolower(texto[fim++]);
+			
+			if((texto[fim] == ' '|| !texto[fim]) && texto[inicio]!=' ')
+			{
+				char str[100];
+                unsigned int lenstr = fim-inicio;
+				strncpy(str, texto+inicio, lenstr);
+				str[lenstr] = 0;
+                pStemmer.stem((char*)str, lenstr);
+				int j=0;
+				for(j = 0; j<ntermos; j++)
+				{
+					if(!strcmp(VetConsultas[consultaid].termos[j].str, str)) break; 
+				}
+				if(j == ntermos) {
+					strcpy(VetConsultas[consultaid].termos[ntermos].str, str);
+					VetConsultas[consultaid].termos[ntermos].id = voc_word->getId(str, strlen(str), 0);
+					if(VetConsultas[consultaid].termos[ntermos].id>-1) {
+						VetConsultas[consultaid].termos[ntermos].idfUrl = idfUrl[VetConsultas[consultaid].termos[ntermos].id];
+						VetConsultas[consultaid].termos[ntermos].idfTitle = idfTitle[VetConsultas[consultaid].termos[ntermos].id];
+						VetConsultas[consultaid].termos[ntermos].idfText = idfText[VetConsultas[consultaid].termos[ntermos].id];
+						VetConsultas[consultaid].termos[ntermos].idfAnchor = idfAnchor[VetConsultas[consultaid].termos[ntermos].id];
+						VetConsultas[consultaid].termos[ntermos].idfWholedoc = idfWholedoc[VetConsultas[consultaid].termos[ntermos].id];
+						ntermos++;
+					}
+				}
+				while(texto[fim] && texto[fim] == ' ')  fim++;
+				inicio = fim;
+			}
+		}
+		VetConsultas[consultaid].NumTermos = ntermos;
+
+		i = 0;		
+		//Para cada termo, pegar o IDF
+		while (i < VetConsultas[consultaid].NumTermos) {
+			for(k = 0; k <5;k++) {
+				sprintf(filename, "%s%s%s", argv[1], features[k],NOME_IDX);
+				fidx = fopen( filename, "rb" );
+				if (!fidx) printf("Erro na abertura do arquivo %s\n", filename);
+				fseek(fidx, sizeof(IDX)*VetConsultas[consultaid].termos[i].id, SEEK_SET);
+				fread( &idx, sizeof(IDX), 1, fidx );
+//				printf("termoid: %d\n", VetConsultas[consultaid].termos[ntermos].id);
+				//Verificar se existe Lista Invertida da features para o termo n
+				if(idx.freq_tam_lista > 0) {
+					_tipo_buffer doc, pos;
+
+					sprintf( arq, "%s%s%s%d", argv[1], features[k],NOME_FREQUENCIA, idx.id_arq );
+					leitor.Inicializa(arq, idx.freq_tam_lista, idx.freq_inicio_termo);
+
+					int doc_id;
+					int relevancia;
+
+					int pos_cons=0, num_docs = 0;
+					leitor.getDoc(&doc, &pos, 0);
+					for(int j=0; j<vetAvaliacao.size(); j++) {
+						/*Consulta diferente*/
+						if( consultaid+idConsulta != vetAvaliacao[j].consid)	continue;
+
+						if(doc < vetAvaliacao[j].docid)	leitor.getDoc(&doc, &pos, vetAvaliacao[j].docid);
+
+						if (doc == vetAvaliacao[j].docid) {
+							VetConsultas[consultaid].documentos[num_docs].docid = doc;
+							VetConsultas[consultaid].documentos[num_docs].relevancia = vetAvaliacao[j].rel;
+							if (k==0) VetConsultas[consultaid].documentos[num_docs].freqs[i].freqText = pos;
+							if (k==1) VetConsultas[consultaid].documentos[num_docs].freqs[i].freqTitle = pos;
+							if (k==2) VetConsultas[consultaid].documentos[num_docs].freqs[i].freqAnchor = pos;
+							if (k==3) VetConsultas[consultaid].documentos[num_docs].freqs[i].freqUrl = pos;
+							if (k==4) VetConsultas[consultaid].documentos[num_docs].freqs[i].freqWholedoc = pos;
+						}
+						VetConsultas[consultaid].documentos[num_docs].docid = vetAvaliacao[j].docid;
+						VetConsultas[consultaid].documentos[num_docs].relevancia = vetAvaliacao[j].rel;
+						
+						VetConsultas[consultaid].documentos[num_docs].pagerank = pagerank[vetAvaliacao[j].docid];
+						VetConsultas[consultaid].documentos[num_docs].slashurl = slashurl[vetAvaliacao[j].docid];
+						VetConsultas[consultaid].documentos[num_docs].lenurl = lenurl[vetAvaliacao[j].docid];
+				
+						num_docs++;
+					}
+					VetConsultas[consultaid].NumDocs = num_docs;
+				} 
+				
+				fclose(fidx);
+			}
+			i++;
+		}
+        consultaid++;		
+	}
+
+    for(int c=0; c<150; c++)
+    {
+        if(VetConsultas[c].NumDocs == 0)    continue;
+
+        printf("%d %d %d\n", c+idConsulta, VetConsultas[c].NumDocs, VetConsultas[c].NumTermos);
+        for(int t=0; t<VetConsultas[c].NumTermos; t++)
+        {
+            printf("\t%s %f %f %f %f %f\n", VetConsultas[c].termos[t].str,
+                VetConsultas[c].termos[t].idfText,VetConsultas[c].termos[t].idfAnchor,VetConsultas[c].termos[t].idfTitle,
+                VetConsultas[c].termos[t].idfUrl,VetConsultas[c].termos[t].idfWholedoc);
+        }
+
+        for(int d=0; d<VetConsultas[c].NumDocs; d++)
+        {
+            int doc = VetConsultas[c].documentos[d].docid;
+            VetConsultas[c].documentos[d].normaText = normaText[doc];
+            VetConsultas[c].documentos[d].normaTitle = normaTitle[doc];
+            VetConsultas[c].documentos[d].normaAnchor = normaAnchor[doc];
+            VetConsultas[c].documentos[d].normaUrl = normaUrl[doc];
+            VetConsultas[c].documentos[d].normaWholedoc = normaWholedoc[doc];
+
+            string id = vetIdTrec[VetConsultas[c].documentos[d].docid];
+            printf("\t%d %d %s %lf %lf %lf\n", VetConsultas[c].documentos[d].relevancia, doc, id.c_str()
+          				  , VetConsultas[c].documentos[d].pagerank
+           			  	  , (double)VetConsultas[c].documentos[d].lenurl
+					  , (double)VetConsultas[c].documentos[d].slashurl);
+
+            printf("\t%d %d %d %d %d\n", (int)VetConsultas[c].documentos[d].normaText, (int)VetConsultas[c].documentos[d].normaAnchor, (int)VetConsultas[c].documentos[d].normaTitle,
+            (int)VetConsultas[c].documentos[d].normaUrl, (int)VetConsultas[c].documentos[d].normaWholedoc);
+            for(int t=0; t<VetConsultas[c].NumTermos; t++)
+            {
+                printf("\t%d %d %d %d %d\n", VetConsultas[c].documentos[d].freqs[t].freqText,VetConsultas[c].documentos[d].freqs[t].freqAnchor,
+                VetConsultas[c].documentos[d].freqs[t].freqTitle,VetConsultas[c].documentos[d].freqs[t].freqUrl,VetConsultas[c].documentos[d].freqs[t].freqWholedoc);
+            }
+        }
+    }
+
+	delete voc_word;
+
+	return 0;
+}
