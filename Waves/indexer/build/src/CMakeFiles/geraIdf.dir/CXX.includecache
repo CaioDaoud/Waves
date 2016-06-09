@@ -1,0 +1,46 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/indexer/src/run/geraIdf.cc
+stdio.h
+-
+stdlib.h
+-
+math.h
+-
+../../../libs-iw/indexer/include/IndiceInvertido.h
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/IndiceInvertido.h
+
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/Heap.h
+limits.h
+-
+stdio.h
+-
+stdlib.h
+-
+
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/IndiceInvertido.h
+stdio.h
+-
+stdlib.h
+-
+iostream
+-
+string.h
+-
+Heap.h
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/Heap.h
+prefixinmem.h
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/prefixinmem.h
+
+/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/libs-iw/indexer/include/prefixinmem.h
+stdio.h
+-
+stdlib.h
+-
+

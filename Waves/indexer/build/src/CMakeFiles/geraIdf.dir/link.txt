@@ -1,0 +1,1 @@
+/usr/bin/c++   -Wall   -O2 -I /usr/local/lib -lm -Wno-deprecated -pthread    -O2 -g -I /usr/local/lib -Wno-deprecated -pthread    CMakeFiles/geraIdf.dir/run/geraIdf.o  -o geraIdf -rdynamic libindexer.so -Wl,-rpath,/home/caio/Documentos/Doutorado/Codigos/gitHub/Waves/indexer/build/src 

@@ -461,6 +461,7 @@ char ConverteBufferUTF8( char ch )
 }
 
 void ConverteBufferSemAcentos( char *ch, char *fim, char *novo ) {
+	char ch_temp;
     while(ch < fim) {
 		
 		if( *ch < 0 ) {
